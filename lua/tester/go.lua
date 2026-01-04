@@ -189,4 +189,73 @@ Tester.gen_or_jump = function()
 	end
 end
 
+local function parse_go_test_output(output)
+	local qf_list = {}
+	for line in string.gmatch(output, "[^\r\n]+") do
+		local fname, lnum, msg = line:match("^(.-):(%d+):%s*(.+)$")
+		if fname and lnum then
+			table.insert(qf_list, {
+				filename = fname,
+				lnum = tonumber(lnum),
+				text = msg,
+			})
+		elseif line ~= "" and line ~= "PASS" and line ~= "FAIL" and line ~= "ok" and line ~= "FAIL" then
+			table.insert(qf_list, {
+				text = line,
+			})
+		end
+	end
+	return qf_list
+end
+
+Tester.run = function()
+	local fname = vim.api.nvim_buf_get_name(0)
+	if not vim.endswith(fname, "_test.go") then
+		vim.notify("[Test] not in a test file", vim.log.levels.WARN)
+		return
+	end
+
+	local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+	local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+	local func_name
+
+	for i = cursor_line, 1, -1 do
+		local line = lines[i]
+		local name = line:match("^func%s+(%w+)%(")
+		if name then
+			func_name = name
+			break
+		end
+	end
+
+	if not func_name then
+		vim.notify("[Test] no test function found at cursor", vim.log.levels.WARN)
+		return
+	end
+
+	local pattern = "^" .. func_name .. "$"
+	local cmd = string.format("go test -v -run %s ./...", vim.fn.shellescape(pattern))
+
+	vim.notify(string.format("[Test] running: %s", cmd), vim.log.levels.INFO)
+
+	local runner = require("tester.runner")
+	runner.run(cmd, {
+		cwd = fn.expand("%:p:h"),
+		on_complete = function(output)
+			local qf_list = parse_go_test_output(output)
+			if #qf_list > 0 then
+				vim.fn.setqflist(qf_list, "r")
+				vim.cmd("copen")
+				vim.notify(string.format("[Test] %d items in quickfix", #qf_list), vim.log.levels.INFO)
+			else
+				if string.find(output, "PASS", 1, true) then
+					vim.notify("[Test] PASS", vim.log.levels.INFO)
+				else
+					vim.notify("[Test] no output", vim.log.levels.WARN)
+				end
+			end
+		end
+	})
+end
+
 return Tester

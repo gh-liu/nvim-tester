@@ -362,4 +362,72 @@ Tester.gen_or_jump = function()
 	vim.notify(string.format("[Test] generate `def %s`", test_func_name), vim.log.levels.INFO)
 end
 
+local function parse_pytest_output(output)
+	local qf_list = {}
+	for line in string.gmatch(output, "[^\r\n]+") do
+		local fname, lnum, msg = line:match("^(.-):(%d+):%s*(.+)$")
+		if fname and lnum then
+			table.insert(qf_list, {
+				filename = fname,
+				lnum = tonumber(lnum),
+				text = msg,
+			})
+		elseif line ~= "" and not line:match("^%=+$") and not line:match("^%s*-+%s*$") then
+			table.insert(qf_list, {
+				text = line,
+			})
+		end
+	end
+	return qf_list
+end
+
+Tester.run = function()
+	local fname = vim.api.nvim_buf_get_name(0)
+	if not is_test_file(fname) then
+		vim.notify("[Test] not in a test file", vim.log.levels.WARN)
+		return
+	end
+
+	local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
+	local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+	local func_name
+
+	for i = cursor_line, 1, -1 do
+		local line = lines[i]
+		local name = line:match("^def%s+(test_%w+)%(")
+		if name then
+			func_name = name
+			break
+		end
+	end
+
+	if not func_name then
+		vim.notify("[Test] no test function found at cursor", vim.log.levels.WARN)
+		return
+	end
+
+	local cmd = string.format("pytest -v -k %s %s", vim.fn.shellescape(func_name), vim.fn.shellescape(fname))
+
+	vim.notify(string.format("[Test] running: %s", cmd), vim.log.levels.INFO)
+
+	local runner = require("tester.runner")
+	runner.run(cmd, {
+		cwd = find_project_root(fname),
+		on_complete = function(output)
+			local qf_list = parse_pytest_output(output)
+			if #qf_list > 0 then
+				vim.fn.setqflist(qf_list, "r")
+				vim.cmd("copen")
+				vim.notify(string.format("[Test] %d items in quickfix", #qf_list), vim.log.levels.INFO)
+			else
+				if string.find(output, "passed", 1, true) or string.find(output, "1 passed", 1, true) then
+					vim.notify("[Test] PASSED", vim.log.levels.INFO)
+				else
+					vim.notify("[Test] no output", vim.log.levels.WARN)
+				end
+			end
+		end
+	})
+end
+
 return Tester
