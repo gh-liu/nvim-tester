@@ -43,19 +43,15 @@ function M.from_output(output, opts)
 	local efm = opts.efm
 
 	if efm and efm ~= "" then
+		-- Use errorformat to parse lines
 		vim.fn.setqflist({}, "r", { title = title, lines = lines, efm = efm })
 	else
+		-- Use custom parser
 		local items = M.parse_file_line_msg(lines)
 		vim.fn.setqflist({}, "r", { title = title, items = items })
 	end
 
 	local count = #vim.fn.getqflist()
-
-	if count == 0 then
-		local items = M.parse_file_line_msg(lines)
-		vim.fn.setqflist({}, "r", { title = title, items = items })
-		count = #vim.fn.getqflist()
-	end
 
 	if count > 0 and opts.open ~= false then
 		vim.cmd("copen")

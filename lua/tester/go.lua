@@ -40,7 +40,7 @@ local function get_closest_func()
 				capture_name = capture
 				func_name = vim.treesitter.get_node_text(node, 0)
 			end
-			if capture == "method_receiver" or capture == "method_recviver" then
+			if capture == "method_receiver" then
 				func_receiver = vim.treesitter.get_node_text(node, 0)
 			end
 		end

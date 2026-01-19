@@ -72,9 +72,16 @@ function M.jump_to_line(bufnr, row, opts)
 				return win
 			end
 		end
+		return nil
 	end
 
-	local win = (reuse_win and bufwinid(bufnr)) or (focus and api.nvim_get_current_win())
+	local win
+	if reuse_win then
+		win = bufwinid(bufnr)
+	end
+	if not win and focus then
+		win = api.nvim_get_current_win()
+	end
 	if not win then
 		win = api.nvim_get_current_win()
 	end
